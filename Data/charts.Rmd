@@ -1,0 +1,336 @@
+---
+title: "group1"
+author: "Erika Fox"
+date: "9/28/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Load packages
+library(ggplot2)
+library(tidyverse)
+library(arm)
+library(pROC)
+
+# Import data
+jobsl <- read.csv("lalondedata.txt")
+
+### Prepare data for analysis
+# Assign factor variables:
+jobsl$treat <- factor(jobsl$treat, levels = c(0,1), labels = c('no training', 'training'))
+jobsl$black <- factor(jobsl$black, levels = c(0,1), labels = c('not black', 'black'))
+jobsl$hispan <- factor(jobsl$hispan, levels = c(0,1), labels = c('not hispanic', 'hispanic'))
+jobsl$married <- factor(jobsl$married, levels = c(0,1), labels = c('not married', 'married'))
+jobsl$nodegree <- factor(jobsl$nodegree, levels = c(0,1), labels = c('Degree', 'No Degree'))
+
+# Create zero income variable based on income.
+jobsl$zero <- as.factor(ifelse(jobsl$re74 == 0, 'zero', 'not zero'))
+
+# Create response variable
+jobsl$positive <- ifelse(jobsl$re78 == 0, 0, 1)
+jobsl$positive_c <- as.factor(ifelse(jobsl$re78 == 0, 'zero', 'positive'))
+
+# Remove irrelevant variables
+jobsl <- dplyr::select(jobsl, -X, -re75)
+
+### EDA
+# First, examining the dataset
+dim(jobsl)
+summary(jobsl)
+str(jobsl)
+head(jobsl)
+
+## Plotting discrete predictor variables
+# Age
+ggplot(data=jobsl, aes(x=positive_c, y=age)) + geom_boxplot()
+binnedplot(x=jobsl$age, y=jobsl$positive,
+           xlab="Age",ylab ="Positive Income?",
+           ylim=c(0,1),col.pts="navy",main="Binned Age vs Positive Income",
+           col.int="white")
+
+# Education
+ggplot(data=jobsl, aes(x=positive_c, y=educ)) + geom_boxplot()
+plot(0:18, tapply(jobsl$positive, jobsl$educ, mean), col = 'blue4', pch = 10) 
+abline(h=0.7, col = "red3")
+binnedplot(x=jobsl$educ, y=jobsl$positive,
+           xlab="Education",ylab ="Positive Income?",
+           ylim=c(0,1),col.pts="navy",main="Binned Education vs Positive Income",
+           col.int="white")
+
+# Noticed that education seems to be different below 8 and below 
+jobsl$newed <- ifelse(jobsl$educ >= 9, 1, 0)
+jobsl$newed <- factor(jobsl$newed, levels = c(0,1), labels = c('less than 9', '9 or more'))
+
+# Income in 1974
+ggplot(data=jobsl, aes(x=positive_c, y=re74)) + geom_boxplot()
+binnedplot(x=jobsl$re74, y=jobsl$positive,
+           xlab="Income in 1974",ylab ="Positive Income?",
+           ylim=c(0,1),col.pts="navy",main="Binned Income in 1974 vs Positive Income",
+           col.int="white")
+
+## Tables for continuous variables
+# Treatment
+chisq.test(jobsl$positive_c, jobsl$treat)
+round(apply(table(jobsl[,c("positive_c","treat")])/sum(table(jobsl[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+
+# Black
+chisq.test(jobsl$positive_c, jobsl$black)
+round(apply(table(jobsl[,c("positive_c","black")])/sum(table(jobsl[,c("positive_c","black")])),
+            2,function(x) x/sum(x)),2)
+
+# Hispanic
+chisq.test(jobsl$positive_c, jobsl$hispan)
+round(apply(table(jobsl[,c("positive_c","hispan")])/sum(table(jobsl[,c("positive_c","hispan")])),
+            2,function(x) x/sum(x)),2)
+
+# Married
+chisq.test(jobsl$positive_c, jobsl$married)
+round(apply(table(jobsl[,c("positive_c","married")])/sum(table(jobsl[,c("positive_c","married")])),
+            2,function(x) x/sum(x)),2)
+
+# No Degree
+chisq.test(jobsl$positive_c, jobsl$nodegree)
+round(apply(table(jobsl[,c("positive_c","nodegree")])/sum(table(jobsl[,c("positive_c","nodegree")])),
+            2,function(x) x/sum(x)),2)
+
+# New Education variable
+chisq.test(jobsl$positive_c, jobsl$newed)
+round(apply(table(jobsl[,c("positive_c","newed")])/sum(table(jobsl[,c("positive_c","newed")])),
+            2,function(x) x/sum(x)),2)
+
+# Zero income
+chisq.test(jobsl$positive_c, jobsl$zero)
+round(apply(table(jobsl[,c("positive_c","zero")])/sum(table(jobsl[,c("positive_c","zero")])),
+            2,function(x) x/sum(x)),2)
+
+## Interactions between discrete and predictor variables
+# Income in 1974 and treatment
+ggplot(data=jobsl, aes(x=positive_c, y=re74)) + geom_boxplot() +
+  facet_wrap(~treat)
+# Income in 1974 and Black
+ggplot(data=jobsl, aes(x=positive_c, y=re74)) + geom_boxplot() +
+  facet_wrap(~black)
+# Income in 1974 and Hispanic
+ggplot(data=jobsl, aes(x=positive_c, y=re74)) + geom_boxplot() +
+  facet_wrap(~hispan)
+# Income in 1974 and Married
+ggplot(data=jobsl, aes(x=positive_c, y=re74)) + geom_boxplot() +
+  facet_wrap(~married)
+# Income in 1974 and No Degree
+ggplot(data=jobsl, aes(x=positive_c, y=re74)) + geom_boxplot() +
+  facet_wrap(~nodegree)
+# Income in 1974 and New Education variable
+ggplot(data=jobsl, aes(x=positive_c, y=re74)) + geom_boxplot() +
+  facet_wrap(~newed)
+
+
+# Age and treatment
+ggplot(data=jobsl, aes(x=positive_c, y=age)) + geom_boxplot() +
+  facet_wrap(~treat)
+# Age and Black
+ggplot(data=jobsl, aes(x=positive_c, y=age)) + geom_boxplot() +
+  facet_wrap(~black)
+# Age and Hispanic
+ggplot(data=jobsl, aes(x=positive_c, y=age)) + geom_boxplot() +
+  facet_wrap(~hispan)
+# Age and Married
+ggplot(data=jobsl, aes(x=positive_c, y=age)) + geom_boxplot() +
+  facet_wrap(~married)
+# Age and No Degree
+ggplot(data=jobsl, aes(x=positive_c, y=age)) + geom_boxplot() +
+  facet_wrap(~nodegree)
+# Age and Zero
+ggplot(data=jobsl, aes(x=positive_c, y=age)) + geom_boxplot() +
+  facet_wrap(~zero)
+# Age and New Education variable
+ggplot(data=jobsl, aes(x=positive_c, y=re74)) + geom_boxplot() +
+  facet_wrap(~newed)
+
+# Education and treatment
+ggplot(data=jobsl, aes(x=positive_c, y=educ)) + geom_boxplot() +
+  facet_wrap(~treat)
+# Education and Black
+ggplot(data=jobsl, aes(x=positive_c, y=educ)) + geom_boxplot() +
+  facet_wrap(~black)
+# Education and Hispanic
+ggplot(data=jobsl, aes(x=positive_c, y=educ)) + geom_boxplot() +
+  facet_wrap(~hispan)
+# Education and Married
+ggplot(data=jobsl, aes(x=positive_c, y=educ)) + geom_boxplot() +
+  facet_wrap(~married)
+# Education and No Degree
+ggplot(data=jobsl, aes(x=positive_c, y=educ)) + geom_boxplot() +
+  facet_wrap(~nodegree)
+# Education and Zero
+ggplot(data=jobsl, aes(x=positive_c, y=educ)) + geom_boxplot() +
+  facet_wrap(~zero)
+
+
+## Interactions between categorical variables
+# Treat and black
+j_black = jobsl[which(jobsl$black == 'black'),]
+j_nblack = jobsl[which(jobsl$black == 'not black'),]
+round(apply(table(j_black[,c("positive_c","treat")])/sum(table(j_black[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+round(apply(table(j_nblack[,c("positive_c","treat")])/sum(table(j_nblack[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+
+# Treat and hispanic
+j_hispan = jobsl[which(jobsl$hispan == 'hispanic'),]
+j_nhispan = jobsl[which(jobsl$hispan == 'not hispanic'),]
+round(apply(table(j_hispan[,c("positive_c","treat")])/sum(table(j_hispan[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+round(apply(table(j_nhispan[,c("positive_c","treat")])/sum(table(j_nhispan[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+
+# Treat and married
+j_married = jobsl[which(jobsl$married == 'married'),]
+j_nmarried = jobsl[which(jobsl$married == 'not married'),]
+round(apply(table(j_married[,c("positive_c","treat")])/sum(table(j_married[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+round(apply(table(j_nmarried[,c("positive_c","treat")])/sum(table(j_nmarried[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+
+# Treat and no degree
+j_deg = jobsl[which(jobsl$nodegree == 'Degree'),]
+j_ndeg = jobsl[which(jobsl$nodegree == 'No Degree'),]
+round(apply(table(j_deg[,c("positive_c","treat")])/sum(table(j_deg[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+round(apply(table(j_ndeg[,c("positive_c","treat")])/sum(table(j_ndeg[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+
+# Treat and new education variable
+j_ed = jobsl[which(jobsl$newed == 'less than 9'),]
+j_ned = jobsl[which(jobsl$newed == '9 or more'),]
+round(apply(table(j_ed[,c("positive_c","treat")])/sum(table(j_ed[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+round(apply(table(j_ned[,c("positive_c","treat")])/sum(table(j_ned[,c("positive_c","treat")])),
+            2,function(x) x/sum(x)),2)
+
+
+### Modeling
+# Center discrete variables
+jobsl$agec <- jobsl$age - mean(jobsl$age)
+jobsl$educc <- jobsl$educ - mean(jobsl$educ)
+jobsl$re74c <- jobsl$re74 - mean(jobsl$re74)
+
+
+
+# Fit full model and null model
+logitfull <- glm(positive ~ treat*(agec + educc + black + hispan + married +
+                                  re74c + zero + newed) + black*re74c 
+              +re74c*married + educc*black + educc*married, 
+              data=jobsl, family="binomial")
+logitnull <- glm(positive ~ treat, data = jobsl, family = "binomial")
+
+# Evaluate full model
+logitfres <- residuals(logitfull, "resp")
+binnedplot(x=fitted(logitfull),y=logitfres,xlab="Fitted Values",
+           col.int="red4",ylab="Avg. Residuals",main="Binned Residual vs Fitted Values",col.pts="navy")
+binnedplot(x=jobsl$agec,y=logitfres,xlab="Age",
+           col.int="red4",ylab="Avg. Residuals",main="Binned Residual vs Age",col.pts="navy")
+binnedplot(x=jobsl$educc,y=logitfres,xlab="Educ",
+           col.int="red4",ylab="Avg. Residuals",main="Binned Residual vs Educ",col.pts="navy")
+binnedplot(x=jobsl$re74c,y=logitfres,xlab="RE74",
+           col.int="red4",ylab="Avg. Residuals",main="Binned Residual vs RE74",col.pts="navy")
+# Perform selection
+n <- nrow(jobsl)
+aic_step <- step(logitfull, scope = list(upper = logitfull, lower = logitnull), direction = "both", trace = 0)
+aic_for <- step(logitnull, scope = list(upper = logitfull, lower = logitnull), direction = "forward", trace = 0)
+aic_back <- step(logitfull, scope = list(upper = logitfull, lower = logitnull), direction = "both", trace = 0)
+bic_step <- step(logitfull, scope = list(upper = logitfull, lower = logitnull), direction = "both", trace = 0, k = log(n))
+bic_for <- step(logitnull, scope = list(upper = logitfull, lower = logitnull), direction = "forward", trace = 0, k = log(n))
+bic_back <- step(logitfull, scope = list(upper = logitfull, lower = logitnull), direction = "both", trace = 0, k = log(n))
+
+anova(aic_for, aic_step, test = 'Chisq')
+anova(aic_for, bic_step, test = 'Chisq')
+
+# Removed hispanic terms from aic_step
+no_hisp <- glm(positive ~ treat + agec + educc + black + re74c + zero + newed +
+                 treat*agec + treat*zero, family = "binomial", data = jobsl)
+anova(no_hisp, aic_step, test = "Chisq")
+
+# Moved forward with model without hisapnic
+
+# Model Assessment for AIC forward without hispanic
+aicres <- residuals(no_hisp, "resp")
+binnedplot(x=fitted(no_hisp),y=aicres,xlab="Fitted Values",
+           col.int="red4",ylab="Avg. Residuals",main="Binned Residual vs Fitted Values",col.pts="navy")
+binnedplot(x=jobsl$agec,y=aicres,xlab="Age",
+           col.int="red4",ylab="Avg. Residuals",main="Binned Residual vs Age",col.pts="navy")
+binnedplot(x=jobsl$re74c,y=aicres,xlab="RE74",
+           col.int="red4",ylab="Avg. Residuals",main="Binned Residual vs RE74",col.pts="navy")
+
+
+# Choosing between final models
+invisible(roc(jobsl$positive,fitted(no_hisp),plot=T,legacy.axes=T, print.thres = 'best', col="red3"))
+invisible(roc(jobsl$positive,fitted(bic_step),plot=T,legacy.axes=T, col="blue3",add=T))
+invisible(roc(jobsl$positive,fitted((aic_for)),plot=T,legacy.axes=T, print.auc = T, print.thres = 'best', col="green3",add=T))
+legend('bottomright', c('AIC stepwise', 'BIC stepwise', 'AIC forward'),lty=c(1,1),
+       lwd=c(2,2),col=c('red3', 'blue3', 'green3'))
+
+# Final model is no hispanic
+final_model <- glm(positive ~ treat + agec + educc + black + re74c + zero + newed +
+                     treat*agec + treat*zero, family = "binomial", data = jobsl)
+summary(final_model)
+# Trying to graph age and training
+newage <- seq(from=-11,to=27,by=.1)
+newdata <- data.frame(matrix(0, nrow=length(newage), ncol = 7))
+names(newdata) <- c("treat","agec", "educc", "black", "re74c", "zero", "newed")
+newdata$agec <- newage; newdata$treat = 'no training'; newdata$re74c = 0; newdata$black = 'not black'; newdata$newed = 'less than 9'
+newdata$educc <- 0
+newdata$zero <- 'not zero'
+newdata$agec <- as.numeric(newdata$agec)
+newdata$educc <- as.numeric(newdata$educc)
+
+preds_no_train <- predict(final_model, newdata, type = "response", se.fit = TRUE)
+newdata$zero <- 'zero'
+preds_no_train_zero <- predict(final_model, newdata, type = "response", se.fit = TRUE)
+newdata$zero <- 'not zero'
+newdata$treat <- 'training' 
+pred_train_pos <- predict(final_model, newdata, type = "response", se.fit = TRUE)
+newdata$zero <- 'zero'
+pred_train_zero <- predict(final_model, newdata, type = "response", se.fit = TRUE)
+
+plot(y=preds_no_train$fit,x=newage,xlab="Age (Centered)",ylab="Positive Income?",
+     main="Expected Change in Probability of Positive Income with Age",col="darkblue",ylim=c(0.2,1))
+points(y=pred_train_pos$fit, x=newage,col="orange")
+points(y=preds_no_train_zero$fit, x=newage, col="green")
+points(y=pred_train_zero$fit, x=newage, col="red")
+legend("bottomright",c("No Training (positive in 74)", "No Training (zero in 74)", "Training (positive in 74)","Training (zero in 74)"),col=c("darkblue","green", "orange", "red"),lty=c(2,2))
+
+
+```
+
+```{r, echo=FALSE,results='asis'}
+library(xtable)
+xtb=xtable(summary(final_model),float.pos='h',center=TRUE, label= "table 1", caption = "Final Regression Model")
+print(xtb,comment=FALSE)
+
+```
+final_model <- glm(positive ~ treat + agec + educc + black + re74c + zero + newed +
+                     treat*agec + treat*zero, family = "binomial", data = jobsl)
+                     
+                     
+$y_i$|$x_i$ ~ $Bernoulli$($\pi_i$)log$(\frac{\pi_i}{1-\pi_i})$= $x_i$$\beta$,
+
+where $y_i$ is $positive$. $x_i$ includes the predictors variables: $treat$, $agec$, $educc$, $black$, $re74c$, $zero$ and $newed$, and the interactions $treat*agec$ and $treat*zero$. $\beta$ is a vector representing the predictor coefficients.
+
+
+where $y_i$ is $positive$. $\beta$ is a vector representing the predictor coefficients.
+
+
+```{r}
+invisible(roc(jobsl$positive,fitted(no_hisp),plot=T,legacy.axes=T, print.thres = 'best', col="red3"))
+invisible(roc(jobsl$positive,fitted(bic_step),plot=T,legacy.axes=T, col="blue3",add=T))
+invisible(roc(jobsl$positive,fitted((aic_for)),plot=T,legacy.axes=T, print.auc = T, print.thres = 'best', col="green3",add=T))
+legend('bottomright', c('AIC stepwise', 'BIC stepwise', 'AIC forward'),lty=c(1,1),
+       lwd=c(2,2),col=c('red3', 'blue3', 'green3'))
+
+
+```
+
